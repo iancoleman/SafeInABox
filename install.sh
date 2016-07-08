@@ -342,7 +342,7 @@ END
     mkdir -p $SALT_STATE_ROOT
 
     # safe_vault
-    cp $CUSTOMAPPS_DIR/safe_vault/target/debug/safe_vault $SALT_STATE_ROOT
+    cp $CUSTOMAPPS_DIR/safe_vault/target/release/safe_vault $SALT_STATE_ROOT
 
     # safe_vault.crust.config
     LAUNCHER_ROOT=$CUSTOMAPPS_DIR/safe_launcher/app_dist
@@ -913,7 +913,7 @@ install_safe_vault(){
     then
         # Create new safe_vault with changes
         log_info "Building safe_vault"
-        cargo build
+        cargo build --release
         touch $BUILD_TIME_FILE
     else
         log_info "Safe Vault has not changed since last build"
