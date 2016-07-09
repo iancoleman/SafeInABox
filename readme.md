@@ -82,5 +82,5 @@ docker ps
 
 ```
 docker ps # to get instance-id
-docker run -i -t <instance-id> bash
+docker exec -i -t <instance-id> bash
 ```
