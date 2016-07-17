@@ -585,6 +585,8 @@ install_safe_core(){
     then
         log_info "Checking out version $SAFE_CORE_VERSION of safe_core, currently at $CURRENT_VERSION"
         git pull
+        rm Cargo.lock
+        git checkout -- .
         git checkout $SAFE_CORE_VERSION
     else
         log_info "Already using version $SAFE_CORE_VERSION of safe_core"
@@ -651,6 +653,7 @@ install_safe_launcher(){
     then
         log_info "Checking out version $SAFE_LAUNCHER_VERSION of safe_launcher, currently at $CURRENT_VERSION"
         git pull
+        git checkout -- .
         git checkout $SAFE_LAUNCHER_VERSION
     else
         log_info "Already using version $SAFE_LAUNCHER_VERSION of safe_launcher"
@@ -728,6 +731,7 @@ install_maidsafe_demo_app(){
     then
         log_info "Checking out version $SAFE_DEMO_APP_VERSION of maidsafe demo app, currently at $CURRENT_VERSION"
         git pull
+        git checkout -- .
         git checkout $SAFE_DEMO_APP_VERSION
     else
         log_info "Already using version $SAFE_DEMO_APP_VERSION of maidsafe demo app"
@@ -801,6 +805,8 @@ install_safe_vault(){
     then
         log_info "Checkout out version $SAFE_VAULT_VERSION of safe_vault, currently at $CURRENT_VERSION"
         git pull
+        rm Cargo.lock
+        git checkout -- .
         git checkout $SAFE_VAULT_VERSION
     else
         log_info "Already using version $SAFE_VAULT_VERSION of safe_vault"
@@ -871,6 +877,8 @@ install_safe_vault(){
     then
         log_info "Checkout version $ROUTING_VERSION_CLEAN of routing, currently at $CURRENT_VERSION"
         git pull
+        rm Cargo.lock
+        git checkout -- .
         git checkout $ROUTING_VERSION_CLEAN
     else
         log_info "Routing is already at $ROUTING_VERSION_CLEAN"
