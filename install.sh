@@ -833,6 +833,28 @@ install_safe_vault(){
     else
         log_info "routing QUORUM_SIZE is already set to $QUORUM_SIZE"
     fi
+    # Change routing check for one vault on lan if required
+    # TODO this substitution is very fragile...
+    if [ "$RESTRICT_TO_ONE_VAULT_PER_LAN" = "false" ]
+    then
+        # disable check for deny_other_local_nodes
+        OLD="deny_other_local_nodes \&\& core.crust_service.has_peers_on_lan()"
+        NEW="deny_other_local_nodes \&\& false"
+    else
+        # enable check for deny_other_local_nodes
+        OLD="deny_other_local_nodes \&\& false"
+        NEW="deny_other_local_nodes \&\& core.crust_service.has_peers_on_lan()"
+    fi
+    if [ "`grep -r "$NEW" ./src | wc -l`" -eq "0" ]
+    then
+        log_info "Changing routing deny_other_local_nodes to $RESTRICT_TO_ONE_VAULT_PER_LAN"
+        sed -i s/"$OLD"/"$NEW"/g ./src/core.rs
+        touch ./src/core.rs
+        # Force safe_vault to be rebuilt
+        touch $CUSTOMAPPS_DIR/safe_vault/force_rebuild
+    else
+        log_info "routing deny_other_local_nodes is already set to $RESTRICT_TO_ONE_VAULT_PER_LAN"
+    fi
     # Return to vault
     cd $CUSTOMAPPS_DIR/safe_vault
     # Build custom version of safe_vault
