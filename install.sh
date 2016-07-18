@@ -386,56 +386,6 @@ name = "safe_vault"
 level = "debug"
 END
 
-    # start_vault.sh
-    cat > $SALT_STATE_ROOT/start_vault.sh <<END
-#!/bin/bash
-
-VAULT_LOG_FILE=/home/$SAFE_USERNAME/vault.log
-VAULT_BINARY=/home/$SAFE_USERNAME/safe_vault
-
-sleep_short() {
-    DELAY=\`bash -c 'echo \$((\$RANDOM % 20))'\`
-    echo "\`date +%T\` Sleeping \$DELAY"
-    sleep \$DELAY
-}
-
-# See if this script is already running
-LOCKFILE=/tmp/vault_script_lock
-if ( set -o noclobber; echo "\$\$" > "\$LOCKFILE") 2> /dev/null; then
-    # Set singleton instance of the script
-    trap 'rm -f "\$LOCKFILE"; exit \$?' INT TERM EXIT
-    # See if first vault is running
-    if ps aux | grep "safe_vault --first" | grep -v grep > /dev/null
-    then
-        echo "\`date +%T\` Waiting ten minutes for network to come fully up before turning off first vault"
-        sleep 610
-        echo "\`date +%T\` Killing first vault to hopefully become regular vault next time"
-        pkill safe_vault
-    fi
-    # See if vault is running
-    if ! pgrep "safe_vault" > /dev/null
-    then
-        # Try to start regular vault
-        echo "Staggering start of vault with random sleep"
-        sleep_short
-        echo "\`date +%T\` Starting vault"
-        \$VAULT_BINARY >> \$VAULT_LOG_FILE &
-        # Wait and see if vault stays running
-        sleep 20
-        # If vault has not remained running, need to start first vault
-        if ! pgrep "safe_vault" > /dev/null
-        then
-            echo "\`date +%T\` Starting first vault"
-            \$VAULT_BINARY --first >> \$VAULT_LOG_FILE &
-        fi
-    fi
-    rm -f "\$LOCKFILE"
-    trap - INT TERM EXIT
-else
-    echo "\`date +%T\` Lock Exists: \$LOCKFILE owned by \$(cat \$LOCKFILE)"
-fi
-END
-
     # vault.sls
     cat > $SALT_STATE_ROOT/vault.sls <<END
 $SAFE_USERNAME:
@@ -443,11 +393,6 @@ $SAFE_USERNAME:
     - fullname: $SAFE_USERNAME
     - shell: /bin/sh
     - home: /home/$SAFE_USERNAME
-
-cron:
-  pkg.installed: []
-  service.running:
-    - enable: True
 
 /home/$SAFE_USERNAME/safe_vault:
   file.managed:
@@ -475,29 +420,6 @@ cron:
     - group: $SAFE_USERNAME
     - require:
       - user: $SAFE_USERNAME
-
-/home/$SAFE_USERNAME/start_vault.sh:
-  file.managed:
-    - source: salt://safe/start_vault.sh
-    - mode: 755
-    - user: $SAFE_USERNAME
-    - group: $SAFE_USERNAME
-    - require:
-      - user: $SAFE_USERNAME
-
-cron-check-vault-every-minute:
-  cron.present:
-    - user: $SAFE_USERNAME
-    - name: '/bin/sh /home/$SAFE_USERNAME/start_vault.sh >> /home/$SAFE_USERNAME/cron.log 2>&1'
-    - minute: '*'
-    - hour: '*'
-    - daymonth: '*'
-    - month: '*'
-    - dayweek: '*'
-    - identifier: 'check-vault-every-minute'
-    - require:
-      - user: $SAFE_USERNAME
-      - pkg: cron
 END
 
     # Wait for vault to ready to receive state
