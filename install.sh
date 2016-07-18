@@ -807,13 +807,14 @@ install_safe_vault(){
         log_info "Routing is already at $ROUTING_VERSION_CLEAN"
     fi
     # Change routing group size if required
+    # TODO this substitution is fragile, especially around filename
     OLD="pub const GROUP_SIZE: usize = .\+"
     NEW="pub const GROUP_SIZE: usize = $GROUP_SIZE;"
     if [ "`grep -r "$NEW" ./src | wc -l`" -eq "0" ]
     then
         log_info "Changing routing GROUP_SIZE to $GROUP_SIZE"
-        sed -i s/"$OLD"/"$NEW"/g ./src/core.rs
-        touch ./src/core.rs
+        sed -i s/"$OLD"/"$NEW"/g ./src/peer_manager.rs
+        touch ./src/peer_manager.rs
         # Force safe_vault to be rebuilt
         touch $CUSTOMAPPS_DIR/safe_vault/force_rebuild
     else
