@@ -706,7 +706,7 @@ install_maidsafe_demo_app(){
         log_info "Demo App has not changed since last build"
     fi
     # Copy new release to the share
-    rm -r $SHARED_DIR/*demo_app*
+    rm -r $SHARED_DIR/*demo*app*
     cp -r $CUSTOMAPPS_DIR/safe_examples/demo_app/app_dist/* $SHARED_DIR
 }
 export -f install_maidsafe_demo_app
