@@ -14,7 +14,7 @@ export SAFE_PASSWORD=${SAFE_PASSWORD-"password"}
 export SAFE_LAUNCHER_VERSION=${SAFE_LAUNCHER_VERSION-"0.6.0"}
 export SAFE_DEMO_APP_VERSION=${SAFE_DEMO_APP_VERSION-"0.4.0"}
 export SAFE_VAULT_VERSION=${SAFE_VAULT_VERSION-"0.10.4"}
-export SAFE_CORE_VERSION=${SAFE_CORE_VERSION-"0.17.0"}
+export SAFE_CORE_VERSION=${SAFE_CORE_VERSION-"0.18.0"}
 export VAULT_MAX_CAPACITY=${VAULT_MAX_CAPACITY-"100"}
 export DEFAULT_ACCOUNT_SIZE=${DEFAULT_ACCOUNT_SIZE-"500"}
 export FILE_UPLOAD_SIZE_RESTRICTED=${FILE_UPLOAD_SIZE_RESTRICTED-"true"}
@@ -25,7 +25,7 @@ export NODE_VERSION=${NODE_VERSION-"6.0.0"}
 export GROUP_SIZE=${GROUP_SIZE-"8"}
 export QUORUM_SIZE=${QUORUM_SIZE-"5"}
 export CHECK_ACCOUNT_SIZE_ON_VAULT=${CHECK_ACCOUNT_SIZE_ON_VAULT-"true"}
-export RESTRICT_TO_ONE_VAULT_PER_LAN=${RESTRICT_TO_ONE_VAULT_PER_LAN-"true"}
+export RESTRICT_TO_ONE_VAULT_PER_LAN=${RESTRICT_TO_ONE_VAULT_PER_LAN-"false"}
 
 # Variables - nonconfigurable
 export START_DIR="/home/$SAFE_USERNAME"
@@ -826,8 +826,8 @@ install_safe_vault(){
     if [ "`grep -r "$NEW" ./src | wc -l`" -eq "0" ]
     then
         log_info "Changing routing QUORUM_SIZE to $QUORUM_SIZE"
-        sed -i s/"$OLD"/"$NEW"/g ./src/core.rs
-        touch ./src/core.rs
+        sed -i s/"$OLD"/"$NEW"/g ./src/peer_manager.rs
+        touch ./src/peer_manager.rs
         # Force safe_vault to be rebuilt
         touch $CUSTOMAPPS_DIR/safe_vault/force_rebuild
     else
@@ -838,18 +838,18 @@ install_safe_vault(){
     if [ "$RESTRICT_TO_ONE_VAULT_PER_LAN" = "false" ]
     then
         # disable check for deny_other_local_nodes
-        OLD="deny_other_local_nodes \&\& core.crust_service.has_peers_on_lan()"
+        OLD="deny_other_local_nodes \&\& crust_service.has_peers_on_lan()"
         NEW="deny_other_local_nodes \&\& false"
     else
         # enable check for deny_other_local_nodes
         OLD="deny_other_local_nodes \&\& false"
-        NEW="deny_other_local_nodes \&\& core.crust_service.has_peers_on_lan()"
+        NEW="deny_other_local_nodes \&\& crust_service.has_peers_on_lan()"
     fi
     if [ "`grep -r "$NEW" ./src | wc -l`" -eq "0" ]
     then
         log_info "Changing routing deny_other_local_nodes to $RESTRICT_TO_ONE_VAULT_PER_LAN"
-        sed -i s/"$OLD"/"$NEW"/g ./src/core.rs
-        touch ./src/core.rs
+        sed -i s/"$OLD"/"$NEW"/g ./src/node.rs
+        touch ./src/node.rs
         # Force safe_vault to be rebuilt
         touch $CUSTOMAPPS_DIR/safe_vault/force_rebuild
     else
