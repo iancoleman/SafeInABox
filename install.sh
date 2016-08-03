@@ -41,6 +41,9 @@ export MASTER_IP=`ifconfig $NETWORK_INTERFACE | grep 'inet addr:' | cut -d: -f2 
 export SUBNET3=`echo $MASTER_IP | egrep -o "[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"`
 export NETWORK_NAME="Private_Safe_Network_`date +%Y_%m_%d_%H_%M_%S`"
 export SHARED_DIR=/shared
+export VAULTS_DIR="$START_DIR/vaults"
+export PORT_PREFIX=500
+export FIRST_VAULT_PORT=$PORT_PREFIX\1
 
 main() {
 
@@ -55,12 +58,11 @@ main() {
     cd $CUSTOMAPPS_DIR
 
     # run commands as root
-    install_salt_master
     install_libsodium
     install_rust
     install_file_sharing
 
-    # run commands as saltbox
+    # run commands as safebox
     su $SAFE_USERNAME -c "bash -c install_node"
     su $SAFE_USERNAME -c "bash -c set_local_safe_libraries"
     su $SAFE_USERNAME -c "bash -c install_safe_core"
@@ -71,9 +73,9 @@ main() {
     su $SAFE_USERNAME -c "bash -c install_safe_vault"
 
     # start the vaults
-    install_minions
+    su $SAFE_USERNAME -c "bash -c start_network"
 
-    log_info "Finished setting up Salt In A Box as network $NETWORK_NAME"
+    log_info "Finished setting up Safe In A Box as network $NETWORK_NAME"
     log_info "Custom apps are shared as detailed:"
     log_info "samba: look for the SAFE_IN_A_BOX workgroup"
     log_info "nfs: mount $MASTER_IP:$SHARED_DIR /path/to/mount/it"
@@ -140,20 +142,6 @@ create_safebox_user(){
         log_info "Creating user '$SAFE_USERNAME'"
         useradd --create-home $SAFE_USERNAME
         echo "$SAFE_USERNAME:$SAFE_PASSWORD" | chpasswd
-    fi
-}
-
-# Install salt master
-# See https://docs.saltstack.com/en/latest/topics/installation/ubuntu.html
-install_salt_master(){
-    if hash salt-master 2>/dev/null
-    then
-        log_info "salt-master already installed"
-    else
-        log_info "Installing salt-master"
-        add-apt-repository --yes ppa:saltstack/salt
-        apt-get update
-        apt-get install --yes salt-master
     fi
 }
 
@@ -253,106 +241,60 @@ install_rust(){
 }
 export -f install_rust
 
-install_minions(){
-    # Install docker
-    if hash docker 2>/dev/null
-    then
-        log_info "docker already installed"
-    else
-        log_info "Installing docker"
-        apt-get install --yes docker.io
-        service docker restart
-    fi
-    # Build a minion container from the ubuntu base container
-    if [ -f Dockerfile ]
-    then
-        log_info "Dockerfile already exists"
-    else
-        log_info "Building minion docker image from base image"
-        cat > Dockerfile <<END
-FROM ubuntu
-RUN apt-get update; apt-get install -y salt-minion
-END
-        docker build -t minion .
-    fi
-    # Stop all existing docker instances
-    log_info "Stopping all existing docker instances"
-    docker kill $(docker ps -a -q)
-    # Remove all existing docker instances
-    log_info "Removing all stopped docker instances"
-    docker rm `docker ps --no-trunc -q -f 'status=exited'`
-    # Remove all salt master keys
-    salt-key --delete-all --yes
-    # Remove existing routing rules
-    iptables -t nat -F POSTROUTING
-    iptables -t nat -F OUTPUT
-    iptables -t nat -F PREROUTING
-    # Create minions
+start_network(){
+    # Stop all vaults
+    log_info "Stopping all existing vaults"
+    pkill safe_vault
+    # Remove old vaults
+    log_info "Removing all existing vaults"
+    rm -r $VAULTS_DIR/*
+    # Create new vaults
     for i in $(seq 1 1 $NUMBER_OF_VAULTS)
     do
-        log_info "Creating and starting minion for vault $i"
-        # Create network interface
-        # see http://blog.codeaholics.org/2013/giving-dockerlxc-containers-a-routable-ip-address/
-        EXTERNAL_NAT_NAME="virtual$i"
-        ip link delete $EXTERNAL_NAT_NAME
-        ip link add $EXTERNAL_NAT_NAME link $NETWORK_INTERFACE type macvlan mode bridge
-        dhclient $EXTERNAL_NAT_NAME
-        EXTERNAL_IP=`ifconfig $EXTERNAL_NAT_NAME | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}'`
-        # Start instance as daemon and get IP
-        CONTAINER_ID=`docker run --add-host=salt:$MASTER_IP -d minion /bin/sh -c "service salt-minion restart; while true; do sleep 1000; done"`
-        INTERNAL_IP=`docker inspect $CONTAINER_ID | grep "\"IPAddress\":" | head -n 1 | cut -d: -f2 | awk '{ print $1}' | sed 's/[\",]*//g'`
-        BRIDGE_NAME="BRIDGE-$EXTERNAL_NAT_NAME"
-        # Clear old routing rules
-        # TODO test if it exists first
-        iptables -t nat -F $BRIDGE_NAME
-        iptables -t nat -X $BRIDGE_NAME
-        # Route traffic here
-        log_info "Mapped $EXTERNAL_IP to $INTERNAL_IP"
-        iptables -t nat -N $BRIDGE_NAME
-        iptables -t nat -A PREROUTING -p all -d $EXTERNAL_IP -j $BRIDGE_NAME
-        iptables -t nat -A OUTPUT -p all -d $EXTERNAL_IP -j $BRIDGE_NAME
-        iptables -t nat -A $BRIDGE_NAME -p all -j DNAT --to-destination $INTERNAL_IP
-        iptables -t nat -I POSTROUTING -p all -s $INTERNAL_IP -j SNAT --to-source $EXTERNAL_IP
-        if [ $i = 1 ]
-        then
-            VAULTS_STARTED=`salt-key -l un | grep ^[0-9a-f] | wc -l`
-            while [ $VAULTS_STARTED -lt 1 ]
-            do
-                log_info "Waiting for first minion to start"
-                sleep 2
-                VAULTS_STARTED=`salt-key -l un | grep ^[0-9a-f] | wc -l`
-            done
-            FIRST_MINION_ID=`salt-key -l un | grep ^[0-9a-f]`
-            log_info "First minion is $FIRST_MINION_ID"
-        fi
-    done
-    # wait for all minions to start
-    VAULTS_STARTED=`salt-key -l un | grep ^[0-9a-f] | wc -l`
-    while [ $VAULTS_STARTED -lt $NUMBER_OF_VAULTS ]
-    do
-        log_info "Waiting for all minions to start, have $VAULTS_STARTED of $NUMBER_OF_VAULTS"
-        sleep 2
-        VAULTS_STARTED=`salt-key -l un | grep ^[0-9a-f] | wc -l`
-    done
-    log_info "Waiting for all minions to start, have $NUMBER_OF_VAULTS of $NUMBER_OF_VAULTS"
-    # accept all salt minion keys
-    salt-key --accept-all --yes
-    # Create salt state
-    log_info "Creating salt state"
-    SALT_STATE_ROOT=/srv/salt/safe
-    mkdir -p $SALT_STATE_ROOT
+        log_info "Creating and starting vault $i"
+        VAULT_DIR=$VAULTS_DIR/vault_$i
+        mkdir -p $VAULT_DIR
 
-    # safe_vault
-    cp $CUSTOMAPPS_DIR/safe_vault/target/release/safe_vault $SALT_STATE_ROOT
+        # safe_vault
+        cp $CUSTOMAPPS_DIR/safe_vault/target/release/safe_vault $VAULT_DIR
 
-    # safe_vault.crust.config
-    LAUNCHER_ROOT=$CUSTOMAPPS_DIR/safe_launcher/app_dist
-    APP_DIR=$LAUNCHER_ROOT/`ls $LAUNCHER_ROOT | sort | tail -n 1`
-    SAFE_LAUNCHER_CONFIGFILE="$APP_DIR/safe_launcher.crust.config"
-    cp $SAFE_LAUNCHER_CONFIGFILE $SALT_STATE_ROOT/safe_vault.crust.config
+        # safe_vault.crust.config
+        VAULT_CRUST_CONFIGFILE=$VAULT_DIR/safe_vault.crust.config
+        THIS_VAULT_PORT=$PORT_PREFIX$i
+        cat > $VAULT_CRUST_CONFIGFILE <<END
+{
+  "hard_coded_contacts": [
+END
+        for PORT_INDEX in $(seq 1 1 $NUMBER_OF_VAULTS)
+        do
+            PORT=$PORT_PREFIX$PORT_INDEX
+            if [ $PORT_INDEX -eq $NUMBER_OF_VAULTS ]
+            then
+                echo "    \"$MASTER_IP:$PORT\"" >> "$VAULT_CRUST_CONFIGFILE"
+            else
+                echo "    \"$MASTER_IP:$PORT\"," >> "$VAULT_CRUST_CONFIGFILE"
+            fi
+        done
+        cat >> "$VAULT_CRUST_CONFIGFILE" <<END
+  ],
+  "tcp_acceptor_port": "$THIS_VAULT_PORT",
+  "service_discovery_port": "$FIRST_VAULT_PORT",
+  "bootstrap_cache_name": null,
+  "network_name": "$NETWORK_NAME"
+}
+END
 
-    # log.toml
-    cat > $SALT_STATE_ROOT/log.toml <<END
+        # safe_vault.vault.config
+        cat > $VAULT_DIR/safe_vault.vault.config <<END
+{
+  "wallet_address": null,
+  "max_capacity": $VAULT_MAX_CAPACITY,
+  "chunk_store_root": "$VAULT_DIR"
+}
+END
+
+        # log.toml
+        cat > $VAULT_DIR/log.toml <<END
 [appender.async_console]
 kind = "async_console"
 pattern = "%l %d{%H:%M:%S.%f} [%M #FS#%f#FE#:%L] %m"
@@ -386,81 +328,18 @@ name = "safe_vault"
 level = "debug"
 END
 
-    # vault.sls
-    cat > $SALT_STATE_ROOT/vault.sls <<END
-$SAFE_USERNAME:
-  user.present:
-    - fullname: $SAFE_USERNAME
-    - shell: /bin/sh
-    - home: /home/$SAFE_USERNAME
-
-/home/$SAFE_USERNAME/safe_vault:
-  file.managed:
-    - source: salt://safe/safe_vault
-    - mode: 775
-    - user: $SAFE_USERNAME
-    - group: $SAFE_USERNAME
-    - require:
-      - user: $SAFE_USERNAME
-
-/home/$SAFE_USERNAME/safe_vault.crust.config:
-  file.managed:
-    - source: salt://safe/safe_vault.crust.config
-    - mode: 664
-    - user: $SAFE_USERNAME
-    - group: $SAFE_USERNAME
-    - require:
-      - user: $SAFE_USERNAME
-
-/home/$SAFE_USERNAME/log.toml:
-  file.managed:
-    - source: salt://safe/log.toml
-    - mode: 664
-    - user: $SAFE_USERNAME
-    - group: $SAFE_USERNAME
-    - require:
-      - user: $SAFE_USERNAME
-END
-
-    # Wait for vault to ready to receive state
-    log_info "Waiting for first minion to be ready for state"
-    sleep 20 # TODO make this correctly detected
-    log_info "Configuring first vault on minion $FIRST_MINION_ID"
-    # Apply salt state to first vault
-    salt $FIRST_MINION_ID state.apply safe.vault | grep "^[SF]"
-    # Start first vault
-    log_info "Starting first vault"
-    salt "$FIRST_MINION_ID" cmd.run runas=$SAFE_USERNAME cwd="/home/$SAFE_USERNAME" timeout=1 ignore_timeout=True "pkill safe_vault; /home/$SAFE_USERNAME/safe_vault --first >> /home/$SAFE_USERNAME/vault.log &" > /dev/null
-    # Wait for first vault to start
-    FIRST_VAULT_STARTED=`salt "$FIRST_MINION_ID" cmd.run "ps aux | grep \"safe_vault --first\" | grep -v grep" | grep "safe_vault --first" | wc -l`
-    CHECKS=0
-    while [ "$FIRST_VAULT_STARTED" -eq "0" ]
-    do
-        log_info "Waiting for first vault to start"
+        # Start the vault
+        cd $VAULT_DIR
+        if [ $i -eq "1" ]
+        then
+            nohup ./safe_vault --first >> vault.log &
+        else
+            nohup ./safe_vault >> vault.log &
+        fi
         sleep 3
-        FIRST_VAULT_STARTED=`salt "$FIRST_MINION_ID" cmd.run "ps aux | grep \"safe_vault --first\" | grep -v grep" | grep "safe_vault --first" | wc -l`
-        CHECKS=$(($CHECKS + 1))
-        # Check if we've waited too long, and if so, restart the first vault
-        if [ "$CHECKS" = "30" ]
-        then
-            log_error "Unable to start first vault."
-            exit 1
-        fi
-        if [ "$(($CHECKS % 10))" = "0" ]
-        then
-            log_info "Restarting first safe vault"
-            salt "$FIRST_MINION_ID" cmd.run runas=$SAFE_USERNAME cwd="/home/$SAFE_USERNAME" timeout=1 ignore_timeout=True "pkill safe_vault; /home/$SAFE_USERNAME/safe_vault --first >> /home/$SAFE_USERNAME/vault.log &" > /dev/null
-        fi
     done
-    log_info "First vault has started"
-    # Start all other vaults
-    log_info "Starting all other vaults"
-    ALL_OTHER_VAULTS="* and not $FIRST_MINION_ID"
-    salt -C "$ALL_OTHER_VAULTS" state.apply safe.vault | grep "^[SF]"
-    # Start the other vaults
-    salt -C "$ALL_OTHER_VAULTS" cmd.run runas=$SAFE_USERNAME cwd="/home/$SAFE_USERNAME" timeout=1 ignore_timeout=True "/home/$SAFE_USERNAME/safe_vault >> /home/$SAFE_USERNAME/vault.log &" > /dev/null
 }
-export -f install_minions
+export -f start_network
 
 # Install nodejs using nvm
 # see https://github.com/creationix/nvm#installation
@@ -613,24 +492,28 @@ install_safe_launcher(){
     LAUNCHER_ROOT=$CUSTOMAPPS_DIR/safe_launcher/app_dist
     APP_DIR=$LAUNCHER_ROOT/`ls $LAUNCHER_ROOT | sort | tail -n 1`
     SAFE_LAUNCHER_CONFIGFILE="$APP_DIR/safe_launcher.crust.config"
-    cat > "$SAFE_LAUNCHER_CONFIGFILE" <<ENDCONTENT
+    cat > "$SAFE_LAUNCHER_CONFIGFILE" <<END
 {
   "hard_coded_contacts": [
-    "$SUBNET3.2:$VAULT_PORT",
-ENDCONTENT
-    for IPINDEX in $(seq 3 1 254)
+END
+    for PORT_INDEX in $(seq 1 1 $NUMBER_OF_VAULTS)
     do
-        echo "    \"$SUBNET3.$IPINDEX:$VAULT_PORT\"," >> "$SAFE_LAUNCHER_CONFIGFILE"
+        PORT=$PORT_PREFIX$PORT_INDEX
+        if [ $PORT_INDEX -eq $NUMBER_OF_VAULTS ]
+        then
+            echo "    \"$MASTER_IP:$PORT\"" >> "$SAFE_LAUNCHER_CONFIGFILE"
+        else
+            echo "    \"$MASTER_IP:$PORT\"," >> "$SAFE_LAUNCHER_CONFIGFILE"
+        fi
     done
-    cat >> "$SAFE_LAUNCHER_CONFIGFILE" <<ENDCONTENT
-    "$SUBNET3.255:$VAULT_PORT"
+    cat >> "$SAFE_LAUNCHER_CONFIGFILE" <<END
   ],
-  "tcp_acceptor_port": "$VAULT_PORT",
-  "service_discovery_port": "$VAULT_PORT",
+  "tcp_acceptor_port": null,
+  "service_discovery_port": "$FIRST_VAULT_PORT",
   "bootstrap_cache_name": null,
   "network_name": "$NETWORK_NAME"
 }
-ENDCONTENT
+END
     # Copy new release to the share
     rm -r $SHARED_DIR/*safe_launcher*
     cp -r $CUSTOMAPPS_DIR/safe_launcher/app_dist/* $SHARED_DIR
