@@ -386,9 +386,10 @@ install_safe_core(){
     if [ "$CURRENT_VERSION" != "$SAFE_CORE_VERSION" ]
     then
         log_info "Checking out version $SAFE_CORE_VERSION of safe_core, currently at $CURRENT_VERSION"
-        git pull
         rm Cargo.lock
         git checkout -- .
+        get checkout master
+        git pull
         git checkout $SAFE_CORE_VERSION
     else
         log_info "Already using version $SAFE_CORE_VERSION of safe_core"
@@ -454,8 +455,9 @@ install_safe_launcher(){
     if [ "$CURRENT_VERSION" != "$SAFE_LAUNCHER_VERSION" ]
     then
         log_info "Checking out version $SAFE_LAUNCHER_VERSION of safe_launcher, currently at $CURRENT_VERSION"
-        git pull
         git checkout -- .
+        get checkout master
+        git pull
         git checkout $SAFE_LAUNCHER_VERSION
     else
         log_info "Already using version $SAFE_LAUNCHER_VERSION of safe_launcher"
@@ -536,8 +538,9 @@ install_maidsafe_demo_app(){
     if [ "$CURRENT_VERSION" != "$SAFE_DEMO_APP_VERSION" ]
     then
         log_info "Checking out version $SAFE_DEMO_APP_VERSION of maidsafe demo app, currently at $CURRENT_VERSION"
-        git pull
         git checkout -- .
+        get checkout master
+        git pull
         git checkout $SAFE_DEMO_APP_VERSION
     else
         log_info "Already using version $SAFE_DEMO_APP_VERSION of maidsafe demo app"
@@ -610,9 +613,10 @@ install_safe_vault(){
     if [ "$CURRENT_VERSION" != "$SAFE_VAULT_VERSION" ]
     then
         log_info "Checkout out version $SAFE_VAULT_VERSION of safe_vault, currently at $CURRENT_VERSION"
-        git pull
         rm Cargo.lock
         git checkout -- .
+        get checkout master
+        git pull
         git checkout $SAFE_VAULT_VERSION
     else
         log_info "Already using version $SAFE_VAULT_VERSION of safe_vault"
@@ -682,9 +686,10 @@ install_safe_vault(){
     if [ "$CURRENT_VERSION" != "$ROUTING_VERSION_CLEAN" ]
     then
         log_info "Checkout version $ROUTING_VERSION_CLEAN of routing, currently at $CURRENT_VERSION"
-        git pull
         rm Cargo.lock
         git checkout -- .
+        git checkout master
+        git pull
         git checkout $ROUTING_VERSION_CLEAN
     else
         log_info "Routing is already at $ROUTING_VERSION_CLEAN"
