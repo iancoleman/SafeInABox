@@ -49,38 +49,3 @@ These are the settings that worked for me, YMMV.
     * 20GB drive, absolute minimum is 9GB
 
 It's possible to run this without a virtual machine, ie directly on the host OS, but it's not recommended to do so.
-
-# Helpers
-
-Some helpful commands to run on the VM for determining the state of the vaults:
-
-* Check vault is running
-
-```
-salt '*' cmd.run 'ps aux | grep safe_vault | grep -v grep'
-```
-
-* Check current routing table size
-
-```
-salt '*' cmd.run 'grep Routing /home/*/vault.log | tail -n 1'
-```
-
-* List vault salt minion ids
-
-```
-salt-key -L
-```
-
-* List vault docker container ids
-
-```
-docker ps
-```
-
-* Run shell for docker instance
-
-```
-docker ps # to get instance-id
-docker exec -i -t <instance-id> bash
-```
