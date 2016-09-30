@@ -8,9 +8,9 @@ Note: at this early stage this project is intended for technical users only. If 
 
 Safe In A Box runs inside a virtual machine. See [setting up a virtual machine](#setting-up-a-virtual-machine).
 
-Copy `install.sh` to the VM.
+Copy `start.sh` to the VM.
 
-Run `sudo ./install.sh` on the VM to install and start a private safe network.
+Run `sudo ./start.sh` on the VM to install and start a private safe network.
 
 Copy the custom apps from the VM to the host, and run the launcher then the demo app.
 
@@ -22,7 +22,7 @@ Vaults run in docker containers inside the virtual machine. This keeps the entir
 
 Many properties of the network can be customized, such as number of vaults, account limits etc. See `safe_in_a_box.example.config` for the full range of configuration options. Copy this file to the VM as `safe_in_a_box.config`.
 
-After changing the config file, simply run `sudo ./install.sh` again and it will bring up the newly configured network. The new launcher and demoapp need to be loaded since every new network has a new name, and the old apps won't talk to the new vaults.
+After changing the config file, simply run `sudo ./start.sh` again and it will bring up the newly configured network. The new launcher and demoapp need to be loaded since every new network has a new name, and the old apps won't talk to the new vaults.
 
 The network is built from source, so the code may be modified in many ways beyond just the configuration options.
 
